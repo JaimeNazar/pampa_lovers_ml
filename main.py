@@ -119,8 +119,20 @@ def predict_from_plot(plot_id: str = Query(..., description="ID of the plot to p
         row.get("ndvi_index") or 0
     ]])
 
+    #  Make predictions with Keras model
     prediction = model.predict(X).tolist()
-    return {"prediction": prediction}
+    
+    # Convert predictions to Python-native list
+    prediction_list = prediction.tolist()
+    
+    # Example: compute a dummy "accuracy" metric
+    # Replace this with your real metric if you have one
+    accuracy = float(np.max(prediction))  # e.g., max confidence per row
+    
+    return {
+        "prediction": prediction_list,
+        "accuracy": accuracy
+    }
 
 
 @app.post("/train-model")

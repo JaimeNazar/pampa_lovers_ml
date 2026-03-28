@@ -78,7 +78,7 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 # --- Request schema ---
 class PlotQuery(BaseModel):
     group: str
-    farm_id: int
+    farm_id: str
 
 
 @app.get("/")
@@ -86,8 +86,8 @@ def root():
     return {"message": "API running"}
 
 
-@app.post("/predict")
-def predict_from_db(input: PlotQuery, user_id: int):
+@app.get("/predict")
+def predict_from_db(input: PlotQuery, user_id: str):
 
     model = load_model_from_supabase(user_id)
 

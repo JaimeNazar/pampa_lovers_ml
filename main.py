@@ -166,7 +166,7 @@ async def train_model(user_id: str):
     """
 
     # Wrap all synchronous Supabase calls in asyncio.to_thread
-    async def fetch_logs():
+    def fetch_logs():
         farms_resp = supabase.table("farms").select("id").eq("user_id", user_id).execute()
         farms = farms_resp.data or []
         if not farms:

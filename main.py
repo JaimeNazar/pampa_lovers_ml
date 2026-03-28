@@ -14,6 +14,39 @@ from pydantic import BaseModel
 import numpy as np
 from fastapi import FastAPI, Query
 
+class CropType(Enum):
+    WHEAT = 1
+    RICE = 2
+    MAIZE = 3
+    COTTON = 4
+    SOYBEAN = 5
+
+class IrrigationType(Enum):
+    DRIP = 1
+    SPRINKLER = 2
+    MANUAL = 3
+    NONE = 4
+
+class FertilizerType(Enum):
+    ORGANIC = 1
+    INORGANIC = 2
+    MIXED = 3
+
+class CropDiseaseStatus(Enum):
+    NONE = 1
+    MILD = 2
+    MODERATE = 3
+    SEVERE = 4
+
+# --- enum conversion ---
+
+def enum_to_int(enum_class, value):
+    if not value:
+        return 0
+    try:
+        return enum_class[value.upper()].value
+    except KeyError:
+        return 0  # unknown value fallback
 
 SUPABASE_MODEL_FILE = "model-1.keras"  # model filename
 
@@ -66,10 +99,12 @@ def predict_from_plot(plot_id: str = Query(..., description="ID of the plot to p
 
     # Convert to model input
     X = np.array([[
-        row.get("crop_type") or 0,
-        row.get("irrigation_type") or 0,
-        row.get("fertilizer_type") or 0,
-        row.get("crop_disease_status") or 0,
+        # Enums to int
+        enum_to_int(CropType, row.get("crop_type")),
+        enum_to_int(IrrigationType, row.get("irrigation_type")),
+        enum_to_int(FertilizerType, row.get("fertilizer_type")),
+        enum_to_int(CropDiseaseStatus, row.get("crop_disease_status")),
+
         row.get("soil_moisture") or 0,
         row.get("soil_ph") or 0,
         row.get("temperature") or 0,

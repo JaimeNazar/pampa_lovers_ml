@@ -120,18 +120,11 @@ def predict_from_plot(plot_id: str = Query(..., description="ID of the plot to p
     # Make predictions with Keras model
     prediction = model.predict(X)
 
-    # Convert predictions safely to Python-native list
-    if isinstance(prediction, np.ndarray):
-        prediction_list = prediction.tolist()
-    else:
-        prediction_list = prediction  # already a list
-
-    # Optional: compute a dummy "accuracy" metric
-    accuracy = float(np.max(prediction))  # max confidence per row
+    # Flatten to a single scalar value
+    prediction_value = float(prediction[0][0])  # first row, first column
 
     return {
-        "prediction": prediction_list,
-        "accuracy": accuracy
+        "prediction": prediction_value
     }
 
 

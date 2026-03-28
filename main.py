@@ -10,62 +10,26 @@ import numpy as np
 from enum import Enum
 import asyncio
 
-class CropType(Enum):
-    WHEAT = 1
-    RICE = 2
-    MAIZE = 3
-    COTTON = 4
-    SOYBEAN = 5
+SUPABASE_MODEL_FILE = "model-1.keras"  # model filename
 
-class IrrigationType(Enum):
-    DRIP = 1
-    SPRINKLER = 2
-    MANUAL = 3
-    NONE = 4
-
-class FertilizerType(Enum):
-    ORGANIC = 1
-    INORGANIC = 2
-    MIXED = 3
-
-class CropDiseaseStatus(Enum):
-    NONE = 1
-    MILD = 2
-    MODERATE = 3
-    SEVERE = 4
-    
-# --- enum conversion ---
-
-def enum_to_int(enum_class, value):
-    if not value:
-        return 0
+def load_global_model(supabase: Client):
+    """
+    Load the global model from Supabase Storage.
+    Returns a Keras model or None if the file does not exist.
+    """
     try:
-        return enum_class[value.upper()].value
-    except KeyError:
-        return 0  # unknown value fallback
+        # Download the model file from Supabase
+        res = supabase.storage.from_("models").download(SUPABASE_MODEL_FILE)
 
-def save_model_to_supabase(user_id, model):
-    with tempfile.NamedTemporaryFile(suffix=".h5", delete=False) as tmp:
-        model.save(tmp.name)
-
-        with open(tmp.name, "rb") as f:
-            supabase.storage.from_("models").upload(
-                f"{user_id}/model.h5",
-                f,
-                {"upsert": True}
-            )
-
-def load_model_from_supabase(user_id):
-    try:
-        res = supabase.storage.from_("models").download(f"{user_id}/model.h5")
-
-        with tempfile.NamedTemporaryFile(suffix=".h5", delete=False) as tmp:
+        # Save to a temporary file and load with TensorFlow
+        with tempfile.NamedTemporaryFile(suffix=".keras", delete=False) as tmp:
             tmp.write(res)
+            tmp.flush()
+            model = tf.keras.models.load_model(tmp.name)
 
-        model = tf.keras.models.load_model(tmp.name)
         return model
-
-    except Exception:
+    except Exception as e:
+        print(f"Error loading model: {e}")
         return None
 
 app = FastAPI()
@@ -78,23 +42,28 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # --- Request schema ---
 class PlotQuery(BaseModel):
-    group: str
-    farm_id: str
-
+    plot_id: str
 
 @app.get("/")
 def root():
     return {"message": "API running"}
 
+from pydantic import BaseModel
+import numpy as np
+from fastapi import FastAPI
+
+class PlotQueryByID(BaseModel):
+    plot_id: str
 
 @app.get("/predict")
-def predict_from_db(input: PlotQuery, user_id: str):
+def predict_from_plot(input: PlotQueryByID):
 
-    model = load_model_from_supabase(user_id)
-
+    # Load the global model
+    model = load_global_model(supabase)  # single model
     if model is None:
         return {"error": "Model not trained yet"}
 
+    # Columns to fetch from the "plots" table
     columns = [
         "crop_type",
         "soil_moisture",
@@ -108,55 +77,51 @@ def predict_from_db(input: PlotQuery, user_id: str):
         "sowing_date",
         "harvest_date",
         "ndvi_index",
-        "crop_disease_status"
+        "crop_disease_status",
+        "sunlight_hours",
+        "total_days"
     ]
-
-    # Convert list → comma string for Supabase
     select_string = ",".join(columns)
 
-    # Query Supabase
+    # Fetch the specific plot data
     response = (
         supabase.table("plots")
         .select(select_string)
-        .eq("group", input.group)
-        .eq("farm_id", input.field_id)
+        .eq("id", input.plot_id)
         .execute()
     )
 
     data = response.data
-
     if not data:
-        return {"error": "No data found"}
+        return {"error": "No data found for this plot"}
 
-    # Convert to model-friendly format
-    processed = []
-    for row in data:
-        processed.append([
+    row = data[0]  # Only one plot
 
-            # Enums to int
-            row.get("crop_type") or 0,
-            row.get("irrigation_type") or 0,
-            row.get("fertilizer_type") or 0,
-            row.get("crop_disease_status") or 0,
-            row.get("soil_moisture") or 0,
-            row.get("soil_ph") or 0,
-            row.get("temperature") or 0,
-            row.get("rainfall") or 0,
-            row.get("humidity") or 0,
-            row.get("sunlight_hours") or 0,
-            row.get("pesticide_usage") or 0,
-            row.get("total_days") or 0,
-            row.get("ndvi_index") or 0
-        ])
+    # Prepare model input
+    X = np.array([[
+        row.get("crop_type") or 0,
+        row.get("irrigation_type") or 0,
+        row.get("fertilizer_type") or 0,
+        row.get("crop_disease_status") or 0,
+        row.get("soil_moisture") or 0,
+        row.get("soil_ph") or 0,
+        row.get("temperature_c") or 0,
+        row.get("rainfall_mm") or 0,
+        row.get("humidity_percent") or 0,
+        row.get("sunlight_hours") or 0,
+        row.get("pesticide_usage_ml") or 0,
+        row.get("total_days") or 0,
+        row.get("ndvi_index") or 0
+    ]])
 
-    X = np.array(processed)
-
+    # Run prediction
     predictions = model.predict(X).tolist()
 
     return {
+        "plot_id": input.plot_id,
         "predictions": predictions
     }
-    
+
 @app.post("/train-model")
 async def train_model():
     def fetch_logs():

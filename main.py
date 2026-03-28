@@ -14,12 +14,15 @@ from pydantic import BaseModel
 import numpy as np
 from fastapi import FastAPI, Query
 
-class CropType(Enum):
-    WHEAT = 1
-    RICE = 2
-    MAIZE = 3
-    COTTON = 4
-    SOYBEAN = 5
+class CropType(Enum): 
+    TRIGO = 1
+    MAÍZ = 2
+    SOJA = 3
+    GIRASOL = 4
+    SORGO = 5
+    CEBADA = 6
+    ARROZ = 7
+    ALGODÓN = 8
 
 class IrrigationType(Enum):
     DRIP = 1

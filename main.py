@@ -134,11 +134,10 @@ def predict_from_db(input: PlotQuery, user_id: str):
         processed.append([
 
             # Enums to int
-            enum_to_int(CropType, row.get("crop_type")),
-            enum_to_int(IrrigationType, row.get("irrigation_type")),
-            enum_to_int(FertilizerType, row.get("fertilizer_type")),
-            enum_to_int(CropDiseaseStatus, row.get("crop_disease_status")),
-
+            row.get("crop_type") or 0,
+            row.get("irrigation_type") or 0,
+            row.get("fertilizer_type") or 0,
+            row.get("crop_disease_status") or 0,
             row.get("soil_moisture") or 0,
             row.get("soil_ph") or 0,
             row.get("temperature") or 0,
@@ -191,7 +190,7 @@ async def train_model():
     logs_data = await asyncio.to_thread(fetch_logs)
 
     if not logs_data:
-        return {"error": "No training data found for this user."}
+        return {"error": "No training data found."}
 
     # Prepare features (X) and target (y)
     X = []
@@ -199,11 +198,10 @@ async def train_model():
 
     for row in logs_data:
         X.append([
-            enum_to_int("CropType", row.get("crop_type")),
-            enum_to_int("IrrigationType", row.get("irrigation_type")),
-            enum_to_int("FertilizerType", row.get("fertilizer_type")),
-            enum_to_int("CropDiseaseStatus", row.get("crop_disease_status")),
-
+            row.get("crop_type") or 0,
+            row.get("irrigation_type") or 0,
+            row.get("fertilizer_type") or 0,
+            row.get("crop_disease_status") or 0,
             row.get("soil_moisture") or 0,
             row.get("soil_ph") or 0,
             row.get("temperature") or 0,

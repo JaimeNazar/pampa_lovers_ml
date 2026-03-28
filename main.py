@@ -158,7 +158,7 @@ def predict_from_db(input: PlotQuery, user_id: str):
     }
 
 @app.post("/train-model")
-def train_model(user_id: int):
+def train_model(user_id: str):
     """
     Train a TensorFlow model for a specific user based on their 'logs' table,
     then save the trained model to Supabase Storage.

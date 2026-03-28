@@ -10,6 +10,11 @@ import numpy as np
 from enum import Enum
 import asyncio
 
+from pydantic import BaseModel
+import numpy as np
+from fastapi import FastAPI
+
+
 SUPABASE_MODEL_FILE = "model-1.keras"  # model filename
 
 def load_global_model(supabase: Client):
@@ -48,15 +53,8 @@ class PlotQuery(BaseModel):
 def root():
     return {"message": "API running"}
 
-from pydantic import BaseModel
-import numpy as np
-from fastapi import FastAPI
-
-class PlotQueryByID(BaseModel):
-    plot_id: str
-
 @app.get("/predict")
-def predict_from_plot(input: PlotQueryByID):
+def predict_from_plot(plot_id: str = Query(..., description="ID of the plot to predict")):
 
     # Load the global model
     model = load_global_model(supabase)  # single model

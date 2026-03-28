@@ -12,3 +12,4 @@ supabase
 joblib
 pandas
 numpy
+asyncio

@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+
 from pydantic import BaseModel
 from supabase import create_client, Client
 import os
@@ -12,7 +12,7 @@ import asyncio
 
 from pydantic import BaseModel
 import numpy as np
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 
 
 SUPABASE_MODEL_FILE = "model-1.keras"  # model filename

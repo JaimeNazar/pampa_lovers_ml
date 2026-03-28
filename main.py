@@ -14,6 +14,29 @@ from pydantic import BaseModel
 import numpy as np
 from fastapi import FastAPI, Query
 
+
+SUPABASE_MODEL_FILE = "model-1.keras"  # model filename
+
+def load_global_model(supabase: Client):
+    """
+    Load the global model from Supabase Storage.
+    Returns a Keras model or None if the file does not exist.
+    """
+    try:
+        # Download the model file from Supabase
+        res = supabase.storage.from_("models").download(SUPABASE_MODEL_FILE)
+
+        # Save to a temporary file and load with TensorFlow
+        with tempfile.NamedTemporaryFile(suffix=".keras", delete=False) as tmp:
+            tmp.write(res)
+            tmp.flush()
+            model = tf.keras.models.load_model(tmp.name)
+
+        return model
+    except Exception as e:
+        print(f"Error loading model: {e}")
+        return None
+
 app = FastAPI()
 
 # --- Supabase setup ---
@@ -26,12 +49,12 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 def root():
     return {"message": "API running"}
 
-# Load model once
-MODEL_FILE = "model-1.keras"
-model = tf.keras.models.load_model(MODEL_FILE)
-
 @app.get("/predict")
 def predict_from_plot(plot_id: str = Query(..., description="ID of the plot to predict")):
+
+    # Load the global model
+    model = load_global_model(supabase)  # single model
+ 
     # Fetch the row from Supabase using plot_id
     response = supabase.table("plots").select("*").eq("id", plot_id).execute()
     data = response.data
@@ -60,6 +83,7 @@ def predict_from_plot(plot_id: str = Query(..., description="ID of the plot to p
 
     prediction = model.predict(X).tolist()
     return {"prediction": prediction}
+
 
 @app.post("/train-model")
 async def train_model():

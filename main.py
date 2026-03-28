@@ -84,7 +84,7 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 @app.get("/")
 def root():
     return {"message": "API running"}
-
+    
 @app.get("/predict")
 def predict_from_plot(plot_id: str = Query(..., description="ID of the plot to predict")):
 
@@ -102,12 +102,10 @@ def predict_from_plot(plot_id: str = Query(..., description="ID of the plot to p
 
     # Convert to model input
     X = np.array([[
-        # Enums to int
         enum_to_int(CropType, row.get("crop_type")),
         enum_to_int(IrrigationType, row.get("irrigation_type")),
         enum_to_int(FertilizerType, row.get("fertilizer_type")),
         enum_to_int(CropDiseaseStatus, row.get("crop_disease_status")),
-
         row.get("soil_moisture") or 0,
         row.get("soil_ph") or 0,
         row.get("temperature") or 0,
@@ -119,16 +117,18 @@ def predict_from_plot(plot_id: str = Query(..., description="ID of the plot to p
         row.get("ndvi_index") or 0
     ]])
 
-    #  Make predictions with Keras model
-    prediction = model.predict(X).tolist()
-    
-    # Convert predictions to Python-native list
-    prediction_list = prediction.tolist()
-    
-    # Example: compute a dummy "accuracy" metric
-    # Replace this with your real metric if you have one
-    accuracy = float(np.max(prediction))  # e.g., max confidence per row
-    
+    # Make predictions with Keras model
+    prediction = model.predict(X)
+
+    # Convert predictions safely to Python-native list
+    if isinstance(prediction, np.ndarray):
+        prediction_list = prediction.tolist()
+    else:
+        prediction_list = prediction  # already a list
+
+    # Optional: compute a dummy "accuracy" metric
+    accuracy = float(np.max(prediction))  # max confidence per row
+
     return {
         "prediction": prediction_list,
         "accuracy": accuracy

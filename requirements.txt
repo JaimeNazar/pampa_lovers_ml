@@ -5,3 +5,4 @@ pandas
 numpy
 pyyaml
 h5py
+uvicorn

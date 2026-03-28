@@ -158,64 +158,44 @@ def predict_from_db(input: PlotQuery, user_id: str):
     }
 
 @app.post("/train-model")
-def train_model(user_id: str):
+async def train_model(user_id: str):
     """
     Train a TensorFlow model for a specific user based on their 'logs' table,
     then save the trained model to Supabase Storage.
     """
 
-    farms_response = (
-        supabase.table("farms")
-        .select("id")  # only need farm_id for now
-        .eq("user_id", user_id)
-        .execute()
-    )
+    # Wrap all synchronous Supabase calls in asyncio.to_thread
+    async def fetch_logs():
+        farms_resp = supabase.table("farms").select("id").eq("user_id", user_id).execute()
+        farms = farms_resp.data or []
+        if not farms:
+            return []
 
-    farms = farms_response.data  # list of dicts
-    if not farms:
-        print("No farms found for user")
-        logs_data = []
-    else:
         farm_ids = [f["id"] for f in farms]
-
-        # Fetch plots for those farms
-        plots_response = (
-            supabase.table("plots")
-            .select("id, farm_id")
-            .in_("farm_id", farm_ids)
-            .execute()
-        )
-        plots = plots_response.data
+        plots_resp = supabase.table("plots").select("id, farm_id").in_("farm_id", farm_ids).execute()
+        plots = plots_resp.data or []
         if not plots:
-            print("No plots found for these farms")
-            logs_data = []
-        else:
-            plot_ids = [p["id"] for p in plots]
+            return []
 
-            # Fetch logs for those plots
-            logs_response = (
-                supabase.table("logs")
-                .select("*")
-                .in_("plot_id", plot_ids)
-                .execute()
-            )
-            logs_data = logs_response.data
+        plot_ids = [p["id"] for p in plots]
+        logs_resp = supabase.table("logs").select("*").in_("plot_id", plot_ids).execute()
+        return logs_resp.data or []
 
-    data = logs_response.data
+    logs_data = await asyncio.to_thread(fetch_logs)
 
-    if not data:
+    if not logs_data:
         return {"error": "No training data found for this user."}
 
     # Prepare features (X) and target (y)
     X = []
     y = []
 
-    for row in data:
+    for row in logs_data:
         X.append([
-            enum_to_int(CropType, row.get("crop_type")),
-            enum_to_int(IrrigationType, row.get("irrigation_type")),
-            enum_to_int(FertilizerType, row.get("fertilizer_type")),
-            enum_to_int(CropDiseaseStatus, row.get("crop_disease_status")),
+            enum_to_int("CropType", row.get("crop_type")),
+            enum_to_int("IrrigationType", row.get("irrigation_type")),
+            enum_to_int("FertilizerType", row.get("fertilizer_type")),
+            enum_to_int("CropDiseaseStatus", row.get("crop_disease_status")),
 
             row.get("soil_moisture") or 0,
             row.get("soil_ph") or 0,
@@ -236,7 +216,7 @@ def train_model(user_id: str):
     model = tf.keras.Sequential([
         tf.keras.layers.Dense(32, activation="relu", input_shape=(X.shape[1],)),
         tf.keras.layers.Dense(16, activation="relu"),
-        tf.keras.layers.Dense(1)  # Regression output
+        tf.keras.layers.Dense(1)
     ])
     model.compile(optimizer="adam", loss="mse")
 
@@ -250,7 +230,7 @@ def train_model(user_id: str):
             supabase.storage.from_("models").upload(
                 f"{user_id}/model.h5",
                 f,
-                {"upsert": True}  # overwrite existing model if any
+                {"upsert": True}
             )
 
     return {

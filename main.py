@@ -164,15 +164,44 @@ def train_model(user_id: str):
     then save the trained model to Supabase Storage.
     """
 
-    # Fetch training data from Supabase
-    response = (
-        supabase.table("logs")
-        .select("*")
+    farms_response = (
+        supabase.table("farms")
+        .select("id")  # only need farm_id for now
         .eq("user_id", user_id)
         .execute()
     )
 
-    data = response.data
+    farms = farms_response.data  # list of dicts
+    if not farms:
+        print("No farms found for user")
+        logs_data = []
+    else:
+        farm_ids = [f["id"] for f in farms]
+
+        # Fetch plots for those farms
+        plots_response = (
+            supabase.table("plots")
+            .select("id, farm_id")
+            .in_("farm_id", farm_ids)
+            .execute()
+        )
+        plots = plots_response.data
+        if not plots:
+            print("No plots found for these farms")
+            logs_data = []
+        else:
+            plot_ids = [p["id"] for p in plots]
+
+            # Fetch logs for those plots
+            logs_response = (
+                supabase.table("logs")
+                .select("*")
+                .in_("plot_id", plot_ids)
+                .execute()
+            )
+            logs_data = logs_response.data
+
+    data = logs_response.data
 
     if not data:
         return {"error": "No training data found for this user."}

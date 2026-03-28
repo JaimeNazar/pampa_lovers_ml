@@ -156,43 +156,27 @@ def predict_from_db(input: PlotQuery, user_id: str):
     return {
         "predictions": predictions
     }
-
+    
 @app.post("/train-model")
 async def train_model():
-    """
-    Train a TensorFlow model for a specific user based on their 'logs' table,
-    then save the trained model to Supabase Storage.
-    """
-
-    # Wrap all synchronous Supabase calls in asyncio.to_thread
     def fetch_logs():
         all_data = []
         limit = 1000
         offset = 0
 
         while True:
-            resp = (
-                supabase.table("logs")
-                .select("*")
-                .range(offset, offset + limit - 1)
-                .execute()
-            )
-
+            resp = supabase.table("logs").select("*").range(offset, offset+limit-1).execute()
             batch = resp.data or []
             if not batch:
                 break
-
             all_data.extend(batch)
             offset += limit
-
         return all_data
 
     logs_data = await asyncio.to_thread(fetch_logs)
-
     if not logs_data:
         return {"error": "No training data found."}
 
-    # Prepare features (X) and target (y)
     X = []
     y = []
 
@@ -217,28 +201,23 @@ async def train_model():
     X = np.array(X)
     y = np.array(y)
 
-    # Build a simple TensorFlow model
     model = tf.keras.Sequential([
-        tf.keras.layers.Dense(32, activation="relu", input_shape=(X.shape[1],)),
+        tf.keras.Input(shape=(X.shape[1],)),
+        tf.keras.layers.Dense(32, activation="relu"),
         tf.keras.layers.Dense(16, activation="relu"),
         tf.keras.layers.Dense(1)
     ])
     model.compile(optimizer="adam", loss="mse")
-
-    # Train the model
     model.fit(X, y, epochs=10, verbose=0)
 
-    # Save model to Supabase Storage
-    with tempfile.NamedTemporaryFile(suffix=".h5", delete=False) as tmp:
+    # Save in .keras format
+    with tempfile.NamedTemporaryFile(suffix=".keras", delete=False) as tmp:
         model.save(tmp.name)
         with open(tmp.name, "rb") as f:
             supabase.storage.from_("models").upload(
-                f"model-1.h5",
+                "model-1.keras",
                 f,
-                {"upsert": True}
+                {"upsert": "true"}  # <-- string, not bool
             )
 
-    return {
-        "message": "Model trained and saved successfully!",
-        "samples": len(X)
-    }
+    return {"message": "Model trained and saved successfully!", "samples": len(X)}

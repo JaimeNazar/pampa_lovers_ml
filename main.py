@@ -159,7 +159,7 @@ def predict_from_db(input: PlotQuery, user_id: str):
     }
 
 @app.post("/train-model")
-async def train_model(user_id: str):
+async def train_model():
     """
     Train a TensorFlow model for a specific user based on their 'logs' table,
     then save the trained model to Supabase Storage.
@@ -167,20 +167,26 @@ async def train_model(user_id: str):
 
     # Wrap all synchronous Supabase calls in asyncio.to_thread
     def fetch_logs():
-        farms_resp = supabase.table("farms").select("id").eq("user_id", user_id).execute()
-        farms = farms_resp.data or []
-        if not farms:
-            return []
+        all_data = []
+        limit = 1000
+        offset = 0
 
-        farm_ids = [f["id"] for f in farms]
-        plots_resp = supabase.table("plots").select("id, farm_id").in_("farm_id", farm_ids).execute()
-        plots = plots_resp.data or []
-        if not plots:
-            return []
+        while True:
+            resp = (
+                supabase.table("logs")
+                .select("*")
+                .range(offset, offset + limit - 1)
+                .execute()
+            )
 
-        plot_ids = [p["id"] for p in plots]
-        logs_resp = supabase.table("logs").select("*").in_("plot_id", plot_ids).execute()
-        return logs_resp.data or []
+            batch = resp.data or []
+            if not batch:
+                break
+
+            all_data.extend(batch)
+            offset += limit
+
+        return all_data
 
     logs_data = await asyncio.to_thread(fetch_logs)
 
@@ -229,7 +235,7 @@ async def train_model(user_id: str):
         model.save(tmp.name)
         with open(tmp.name, "rb") as f:
             supabase.storage.from_("models").upload(
-                f"{user_id}/model.h5",
+                f"model-1.h5",
                 f,
                 {"upsert": True}
             )
